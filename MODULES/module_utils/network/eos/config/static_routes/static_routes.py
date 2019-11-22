@@ -11,8 +11,9 @@ necessary to bring the current configuration to it's desired end-state is
 created
 """
 from ansible.module_utils.network.common.cfg.base import ConfigBase
-from ansible.module_utils.network.common.utils import to_list
+from ansible.module_utils.network.common.utils import to_list, dict_diff
 from ansible.module_utils.network.eos.facts.facts import Facts
+import re
 
 
 class Static_routes(ConfigBase):
@@ -53,12 +54,13 @@ class Static_routes(ConfigBase):
         result = {'changed': False}
         warnings = list()
         commands = list()
-
+        import q
         existing_static_routes_facts = self.get_static_routes_facts()
         commands.extend(self.set_config(existing_static_routes_facts))
         if commands:
             if not self._module.check_mode:
-                self._connection.edit_config(commands)
+                for command in commands:
+                    self._connection.edit_config(command)
             result['changed'] = True
         result['commands'] = commands
 
@@ -79,10 +81,20 @@ class Static_routes(ConfigBase):
         :returns: the commands necessary to migrate the current configuration
                   to the desired configuration
         """
+        import q
+        commands = []
+        data = self._connection.get('show running-config | grep route')
         want = self._module.params['config']
         have = existing_static_routes_facts
         resp = self.set_state(want, have)
-        return to_list(resp)
+        onbox_configs = data.split('\n')
+        q(onbox_configs)
+        for want_config in resp:
+            if want_config not in onbox_configs:
+                q(want_config)
+                commands.append(want_config) 
+        q(commands)
+        return commands
 
     def set_state(self, want, have):
         """ Select the appropriate function based on the state provided
@@ -102,7 +114,7 @@ class Static_routes(ConfigBase):
             commands = self._state_deleted(**kwargs)
         elif state == 'merged':
             kwargs = {}
-            commands = self._state_merged(**kwargs)
+            commands = self._state_merged(want,have)
         elif state == 'replaced':
             kwargs = {}
             commands = self._state_replaced(**kwargs)
@@ -116,6 +128,8 @@ class Static_routes(ConfigBase):
                   to the desired configuration
         """
         commands = []
+
+
         return commands
 
     @staticmethod
@@ -130,15 +144,14 @@ class Static_routes(ConfigBase):
         return commands
 
     @staticmethod
-    def _state_merged(**kwargs):
+    def _state_merged(want, have):
         """ The command generator when state is merged
 
         :rtype: A list
         :returns: the commands necessary to merge the provided into
                   the current configuration
         """
-        commands = []
-        return commands
+        return set_commands(want, have)
 
     @staticmethod
     def _state_deleted(**kwargs):
@@ -150,3 +163,69 @@ class Static_routes(ConfigBase):
         """
         commands = []
         return commands
+    
+def set_commands(want, have):
+    commands = []
+    for w in want:
+        import q
+        return_command = add_commands(w)
+        for command in return_command:
+            commands.append(command)
+    return commands
+        # if not obj_in_have:
+        #    commands = self.add_commands(w)
+        # else:
+        #    diff = self.diff_of_dicts(w, obj_in_have)
+        #    commands = self.add_commands(diff)
+        # return commands
+
+def add_commands(want):
+    commandset = []
+    if not want:
+        return commands
+    import q
+    vrf = want["vrf"] if want["vrf"] else None
+    for address_family in want["address_families"]:
+        for route in address_family["routes"]:
+            for next_hop in route["next_hops"]:
+                commands = []
+                if address_family["afi"] == "ipv4":
+                    commands.append('ip route')
+                else:
+                    commands.append('ipv6 route')
+                if vrf:
+                    commands.append(' vrf ' + vrf)
+                if not re.search(r'/', route["dest"]):
+                    mask = route["dest"].split( )[1]
+                    cidr = get_net_size(mask)
+                    commands.append(' ' + route["dest"].split( )[0] + '/' + cidr)
+                else:
+                    commands.append(' ' + route["dest"])
+                q(commands)
+                commands.append(' ' + next_hop["interface"])
+                if next_hop["forward_router_address"]:
+                    commands.append(' ' + next_hop["forward_router_address"])
+                if next_hop["mpls_label"]:
+                    commands.append(' label ' + str(next_hop["mpls_label"]))
+                if next_hop["track"]:
+                    commands.append(' track '+next_hop["track"])
+                if next_hop["admin_distance"]:
+                    commands.append(' '+str(next_hop["admin_distance"]))
+                if next_hop["description"]:
+                    commands.append(' name '+str(next_hop["description"]))
+                if next_hop["tag"]:
+                    commands.append(' tag '+str(next_hop["tag"]))
+
+                config_commands = "".join(commands)
+                commandset.append(config_commands)
+    return commandset
+
+def get_net_size(netmask):
+    import q
+    q(netmask)
+    binary_str = ''
+    netmask = netmask.split('.')
+    for octet in netmask:
+        q(octet)
+        binary_str += bin(int(octet))[2:].zfill(8)
+    return str(len(binary_str.rstrip('0')))

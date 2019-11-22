@@ -51,7 +51,6 @@ class Static_routesFacts(object):
         resource_delim = 'ip.* route'
         find_pattern = r'(?:^|\n)%s.*?(?=(?:^|\n)%s|$)' % (resource_delim,
                                                            resource_delim)
-        resources = [p.strip() for p in re.findall(find_pattern, data, re.DOTALL)]
         resources = [p.strip() for p in re.findall(find_pattern, data)]
         resources_without_vrf = []
         resource_vrf = {}
@@ -124,6 +123,7 @@ class Static_routesFacts(object):
                 route_update = False
                 if matches[0][1] == "vrf":
                     vrf = remainder.pop(0)
+                    # new vrf 
                     if vrf not in vrf_list and vrf_list:
                         route_dict.update({"next_hops": next_hops})
                         routes.append(route_dict)
@@ -139,6 +139,7 @@ class Static_routesFacts(object):
                 afi  = "ipv4" if matches[0][0] == "ip" else "ipv6"
                 if afi not in afi_list:
                     if afi_list and not route_update:
+                        # new afi and not the first updating all prev configs
                         route_dict.update({"next_hops": next_hops})
                         routes.append(route_dict)
                         address_family_dict.update({"routes": routes})
@@ -148,10 +149,12 @@ class Static_routesFacts(object):
                     address_family_dict.update({"afi": afi})
                     routes = []
                     afi_list.append(afi)
+                # To check the format of the dest
                 prefix = re.search(r'/', dest)
                 if not prefix:
                     dest = dest + ' ' + remainder.pop(0)
                 if dest not in dest_list:
+                    # For new dest and  not the first dest
                     if  dest_list and not route_update:
                         route_dict.update({"next_hops": next_hops})
                         routes.append(route_dict)
