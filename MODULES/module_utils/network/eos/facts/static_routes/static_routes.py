@@ -35,6 +35,10 @@ class Static_routesFacts(object):
 
         self.generated_spec = utils.generate_dict(facts_argument_spec)
 
+    def get_device_data(self, connection):
+        return connection.get('show running-config | grep route')
+
+
     def populate_facts(self, connection, ansible_facts, data=None):
         """ Populate the facts for static_routes
         :param connection: the device connection
@@ -44,7 +48,7 @@ class Static_routesFacts(object):
         :returns: facts
         """
         if not data:
-            data = connection.get('show running-config | grep route')
+            data = self.get_device_data(connection)
 
         import q
         # split the config into instances of the resource
