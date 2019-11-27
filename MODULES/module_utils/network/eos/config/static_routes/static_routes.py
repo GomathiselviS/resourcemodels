@@ -13,7 +13,6 @@ created
 from ansible.module_utils.network.common.cfg.base import ConfigBase
 from ansible.module_utils.network.common.utils import to_list, dict_diff, remove_empties
 from ansible.module_utils.network.eos.facts.facts import Facts
-#from ansible.module_utils.network.eos.facts.static_routes.static_routes import get_device_data
 import re
 
 
@@ -34,13 +33,13 @@ class Static_routes(ConfigBase):
     def __init__(self, module):
         super(Static_routes, self).__init__(module)
 
-    def get_static_routes_facts(self):
+    def get_static_routes_facts(self, data=None):
         """ Get the 'facts' (the current configuration)
 
         :rtype: A dictionary
         :returns: The current configuration as a dictionary
         """
-        facts, _warnings = Facts(self._module).get_facts(self.gather_subset, self.gather_network_resources)
+        facts, _warnings = Facts(self._module).get_facts(self.gather_subset, self.gather_network_resources, data=data)
         static_routes_facts = facts['ansible_network_resources'].get('static_routes')
         if not static_routes_facts:
             return []
@@ -55,23 +54,48 @@ class Static_routes(ConfigBase):
         result = {'changed': False}
         warnings = list()
         commands = list()
-        existing_static_routes_facts = self.get_static_routes_facts()
-        commands.extend(self.set_config(existing_static_routes_facts))
-        if commands:
+        if self.state in self.ACTION_STATES:
+            existing_static_routes_facts = self.get_static_routes_facts()
+        else:
+            existing_static_routes_facts = []
+
+        if self.state in self.ACTION_STATES or self.state == 'rendered':
+            commands.extend(self.set_config(existing_static_routes_facts))
+        
+        if commands and self.state in self.ACTION_STATES:
             if not self._module.check_mode:
                 for command in commands:
                     self._connection.edit_config(command)
             result['changed'] = True
-        result['commands'] = commands
+        if self.state in self.ACTION_STATES:
+            result['commands'] = commands
+        if self.state in self.ACTION_STATES or self.state == 'gathered':
+            changed_static_routes_facts = self.get_static_routes_facts()
+        elif self.state == 'rendered':
+            result['rendered'] = commands
+        elif self.state == 'parsed':
+            result['parsed'] = self.get_static_routes_facts(data=self._module.params['running_config'])
+        else:
+            changed_static_routes_facts = []
 
-        changed_static_routes_facts = self.get_static_routes_facts()
-
-        result['before'] = existing_static_routes_facts
-        if result['changed']:
-            result['after'] = changed_static_routes_facts
+        if self.state in self.ACTION_STATES:
+            result['before'] = existing_static_routes_facts
+            if result['changed']:
+                result['after'] = changed_static_routes_facts
+        elif self.state == 'gathered':
+            result['gathered'] = changed_static_routes_facts
 
         result['warnings'] = warnings
         return result
+
+        #changed_static_routes_facts = self.get_static_routes_facts()
+
+        #result['before'] = existing_static_routes_facts
+        #if result['changed']:
+        #    result['after'] = changed_static_routes_facts
+
+        #result['warnings'] = warnings
+        #return result
 
     def set_config(self, existing_static_routes_facts):
         """ Collect the configuration from the args passed to the module,
@@ -81,10 +105,12 @@ class Static_routes(ConfigBase):
         :returns: the commands necessary to migrate the current configuration
                   to the desired configuration
         """
-        import q
         commands = []
-        data = self._connection.get('show running-config | grep route')
-        #data = self.get_device_data(_connection)
+        onbox_configs = []
+        for h in existing_static_routes_facts:
+            return_command = add_commands(h)
+            for command in return_command:
+                onbox_configs.append(command)
         config = self._module.params.get('config')
         want = []
         if config:
@@ -92,7 +118,6 @@ class Static_routes(ConfigBase):
                 want.append(remove_empties(w))
         have = existing_static_routes_facts
         resp = self.set_state(want, have)
-        onbox_configs = data.split('\n')
         for want_config in resp:
             if want_config not in onbox_configs:
                 commands.append(want_config) 
@@ -107,23 +132,20 @@ class Static_routes(ConfigBase):
         :returns: the commands necessary to migrate the current configuration
                   to the desired configuration
         """
+        commands = []
         state = self._module.params['state']
         if state == 'overridden':
-            kwargs = {}
             commands = self._state_overridden(want, have)
         elif state == 'deleted':
-            kwargs = {}
             commands = self._state_deleted(want,have)
-        elif state == 'merged':
-            kwargs = {}
+        elif state == 'merged' or self.state == 'rendered':
             commands = self._state_merged(want,have)
         elif state == 'replaced':
-            kwargs = {}
-            commands = self._state_replaced(**kwargs)
+            commands = self._state_replaced(want, have)
         return commands
 
     @staticmethod
-    def _state_replaced(**kwargs):
+    def _state_replaced(want, have):
         """ The command generator when state is replaced
 
         :rtype: A list
@@ -132,13 +154,23 @@ class Static_routes(ConfigBase):
         """
         commands = []
         haveconfigs = []
-        import q
+        vrf = get_vrf(want)
         for h in have:
             return_command = add_commands(h)
             for command in return_command:
-                haveconfigs.append(command)
+                if vrf == "default":
+                    if "vrf" not in command:
+                        haveconfigs.append(command)
+                else:
+                    if vrf in command:
+                        haveconfigs.append(command)          
+        wantconfigs = set_commands(want, have)
 
-
+        removeconfigs = list(set(haveconfigs) - set(wantconfigs))
+        for command in removeconfigs:
+            commands.append("no " + command)
+        for wantcmd in wantconfigs:
+            commands.append(wantcmd)
         return commands
 
     @staticmethod
@@ -151,7 +183,6 @@ class Static_routes(ConfigBase):
         """
         commands = []
         haveconfigs = []
-        import q
         for h in have:
             return_command = add_commands(h)
             for command in return_command:
@@ -162,10 +193,8 @@ class Static_routes(ConfigBase):
         removeconfigs = list(set(haveconfigs) - set(wantconfigs))
         for command in removeconfigs:
             commands.append("no " + command)
-        q(commands)
         for wantcmd in wantconfigs:
             commands.append(wantcmd)
-        q(commands)
         return commands
 
     @staticmethod
@@ -187,10 +216,17 @@ class Static_routes(ConfigBase):
                   of the provided objects
         """
         commands = []
-        for w in want:
-            return_command = del_commands(w,have)
-            for command in return_command:
-                commands.append(command)
+        if not want:
+            for h in have:
+                return_command = add_commands(h)
+                for command in return_command:
+                    command = "no " + command
+                    commands.append(command)
+        else :
+            for w in want:
+                return_command = del_commands(w,have)
+                for command in return_command:
+                    commands.append(command)
         return commands
     
 def set_commands(want, have):
@@ -211,7 +247,6 @@ def add_commands(want):
     commandset = []
     if not want:
         return commandset
-    import q
     vrf = want["vrf"] if "vrf" in want.keys() and want["vrf"] != "default" else None
     for address_family in want["address_families"]:
         for route in address_family["routes"]:
@@ -250,13 +285,11 @@ def add_commands(want):
 def del_commands(want,have):
     commandset = []
     haveconfigs = []
-    import q
     for h in have:
         return_command = add_commands(h)
         for command in return_command:
             command = "no " + command
             haveconfigs.append(command)
-
     if want is None or "address_families" not in want.keys():
         commandset = haveconfigs
     if "address_families" not in want.keys() and "vrf" in want.keys():
@@ -270,7 +303,7 @@ def del_commands(want,have):
             if "vrf" not in command:
                 commandset.append(command)
 
-    if want["address_families"]:
+    elif want["address_families"]:
         vrf = want["vrf"] if "vrf" in want.keys() and want["vrf"] else None
         for address_family in want["address_families"]:
             if "routes" not in address_family.keys():
@@ -328,7 +361,6 @@ def del_commands(want,have):
 
 
 def get_net_size(netmask):
-    import q
     binary_str = ''
     netmask = netmask.split('.')
     for octet in netmask:
@@ -336,7 +368,7 @@ def get_net_size(netmask):
     return str(len(binary_str.rstrip('0')))
 
 def get_vrf(config):
-    vrf = []
-    for c in config
+    vrf = ""
+    for c in config:
         vrf = c["vrf"] if "vrf" in c.keys() and c["vrf"] else "default"
     return vrf

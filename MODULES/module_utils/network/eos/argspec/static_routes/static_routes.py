@@ -21,7 +21,6 @@
 #   builder template.
 #
 #############################################
-
 """
 The arg spec for the eos_static_routes module
 """
@@ -30,38 +29,81 @@ The arg spec for the eos_static_routes module
 class Static_routesArgs(object):  # pylint: disable=R0903
     """The arg spec for the eos_static_routes module
     """
-
     def __init__(self, **kwargs):
         pass
 
-    argument_spec = {'config': {'elements': 'dict',
-            'options': {'address_families': {'elements': 'dict',
-                                             'options': {'afi': {'choices': ['ipv4',
-                                                                             'ipv6'],
-                                                                 'required': True,
-                                                                 'type': 'str'},
-                                                         'routes': {'elements': 'dict',
-                                                                    'options': {'dest': {'required': True,
-                                                                                         'type': 'str'},
-                                                                                'next_hops': {'elements': 'dict',
-                                                                                              'options': {'admin_distance': {'type': 'int'},
-                                                                                                          'description': {'type': 'str'},
-                                                                                                          'forward_router_address': {'type': 'str'},
-                                                                                                          'interface': {'type': 'str'},
-                                                                                                          'mpls_label': {'type': 'int'},
-                                                                                                          'tag': {'type': 'int'},
-                                                                                                          'track': {'type': 'str'},
-                                                                                                          'vrf': {'type': 'str'}},
-                                                                                              'type': 'list'}},
-                                                                    'type': 'list'}},
-                                             'type': 'list'},
-                        'vrf': {'type': 'str'}},
-            'type': 'list'},
- 'state': {'choices': ['deleted',
-                       'merged',
-                       'overridden',
-                       'replaced',
-                       'gathered',
-                       'rendered'],
-           'default': 'merged',
-           'type': 'str'}}  # pylint: disable=C0301
+    argument_spec = {
+        'config': {
+            'elements': 'dict',
+            'options': {
+                'address_families': {
+                    'elements': 'dict',
+                    'options': {
+                        'afi': {
+                            'choices': ['ipv4', 'ipv6'],
+                            'required': True,
+                            'type': 'str'
+                        },
+                        'routes': {
+                            'elements': 'dict',
+                            'options': {
+                                'dest': {
+                                    'required': True,
+                                    'type': 'str'
+                                },
+                                'next_hops': {
+                                    'elements': 'dict',
+                                    'options': {
+                                        'admin_distance': {
+                                            'type': 'int'
+                                        },
+                                        'description': {
+                                            'type': 'str'
+                                        },
+                                        'forward_router_address': {
+                                            'type': 'str'
+                                        },
+                                        'interface': {
+                                            'type': 'str'
+                                        },
+                                        'mpls_label': {
+                                            'type': 'int'
+                                        },
+                                        'tag': {
+                                            'type': 'int'
+                                        },
+                                        'track': {
+                                            'type': 'str'
+                                        },
+                                        'vrf': {
+                                            'type': 'str'
+                                        }
+                                    },
+                                    'type': 'list'
+                                }
+                            },
+                            'type': 'list'
+                        }
+                    },
+                    'type': 'list'
+                },
+                'vrf': {
+                    'type': 'str'
+                }
+            },
+            'type': 'list'
+        },
+        'running_config': {
+            'type': 'str'
+        },
+        'state': {
+            'choices': [
+                'deleted', 'merged', 'overridden', 'replaced', 'gathered',
+                'rendered', 'parsed'
+            ],
+            'default':
+            'merged',
+            'type':
+            'str'
+        }
+    }  # pylint: disable=C0301
