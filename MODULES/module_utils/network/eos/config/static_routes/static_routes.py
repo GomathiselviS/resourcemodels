@@ -158,7 +158,7 @@ class Static_routes(ConfigBase):
         for h in have:
             return_command = add_commands(h)
             for command in return_command:
-                if vrf == "default":
+                if vrf == None:
                     if "vrf" not in command:
                         haveconfigs.append(command)
                 else:
@@ -247,7 +247,7 @@ def add_commands(want):
     commandset = []
     if not want:
         return commandset
-    vrf = want["vrf"] if "vrf" in want.keys() and want["vrf"] != "default" else None
+    vrf = want["vrf"] if "vrf" in want.keys() and want["vrf"] != None else None
     for address_family in want["address_families"]:
         for route in address_family["routes"]:
             for next_hop in route["next_hops"]:
@@ -264,7 +264,11 @@ def add_commands(want):
                     commands.append(' ' + route["dest"].split( )[0] + '/' + cidr)
                 else:
                     commands.append(' ' + route["dest"])
-                commands.append(' ' + next_hop["interface"])
+                if "interface" in next_hop.keys():
+                    commands.append(' ' + next_hop["interface"])
+                if "nexhop_grp" in next_hop.keys():
+                    commands.append(' Nexthop-Group' + ' ' + next_hop["nexthop_grp"])
+                    commands.append(' ' + next_hop["interface"])
                 if "forward_router_address" in next_hop.keys():
                     commands.append(' ' + next_hop["forward_router_address"])
                 if "mpls_label" in next_hop.keys():
@@ -341,7 +345,10 @@ def del_commands(want,have):
                             if vrf:
                                 commands.append(' vrf ' + vrf)
                             commands.append(' ' + destination)
-                            commands.append(' ' + next_hop["interface"])
+                            if "interface" in next_hop.keys():
+                                commands.append(' ' + next_hop["interface"])
+                            if "nexhop_grp" in next_hop.keys():
+                                commands.append(' Nexthop-Group' + ' ' + next_hop["nexthop_grp"])
                             if "forward_router_address" in next_hop.keys():
                                 commands.append(' ' + next_hop["forward_router_address"])
                             if "mpls_label" in next_hop.keys():
@@ -370,5 +377,5 @@ def get_net_size(netmask):
 def get_vrf(config):
     vrf = ""
     for c in config:
-        vrf = c["vrf"] if "vrf" in c.keys() and c["vrf"] else "default"
+        vrf = c["vrf"] if "vrf" in c.keys() and c["vrf"] else None
     return vrf
