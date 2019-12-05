@@ -25,6 +25,8 @@
 The arg spec for the eos_static_routes module
 """
 
+from __future__ import (absolute_import, division, print_function)
+__metaclass__ = type
 
 class Static_routesArgs(object):  # pylint: disable=R0903
     """The arg spec for the eos_static_routes module
@@ -67,8 +69,8 @@ class Static_routesArgs(object):  # pylint: disable=R0903
                                             'type': 'str'
                                         },
                                         'nexthop_grp': {
-                                           'type': 'str'
-                                        }, 
+                                            'type': 'str'
+                                        },
                                         'mpls_label': {
                                             'type': 'int'
                                         },

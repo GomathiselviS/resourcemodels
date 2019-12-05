@@ -10,10 +10,14 @@ is compared to the provided configuration (as dict) and the command set
 necessary to bring the current configuration to it's desired end-state is
 created
 """
-from ansible.module_utils.network.common.cfg.base import ConfigBase
-from ansible.module_utils.network.common.utils import to_list, dict_diff, remove_empties
-from ansible.module_utils.network.eos.facts.facts import Facts
+
+from __future__ import (absolute_import, division, print_function)
+__metaclass__ = type
+
 import re
+from ansible.module_utils.network.common.cfg.base import ConfigBase
+from ansible.module_utils.network.common.utils import remove_empties
+from ansible.module_utils.network.eos.facts.facts import Facts
 
 
 class Static_routes(ConfigBase):
@@ -61,7 +65,7 @@ class Static_routes(ConfigBase):
 
         if self.state in self.ACTION_STATES or self.state == 'rendered':
             commands.extend(self.set_config(existing_static_routes_facts))
-        
+
         if commands and self.state in self.ACTION_STATES:
             if not self._module.check_mode:
                 for command in commands:
@@ -88,15 +92,6 @@ class Static_routes(ConfigBase):
         result['warnings'] = warnings
         return result
 
-        #changed_static_routes_facts = self.get_static_routes_facts()
-
-        #result['before'] = existing_static_routes_facts
-        #if result['changed']:
-        #    result['after'] = changed_static_routes_facts
-
-        #result['warnings'] = warnings
-        #return result
-
     def set_config(self, existing_static_routes_facts):
         """ Collect the configuration from the args passed to the module,
             collect the current configuration (as a dict from facts)
@@ -120,7 +115,7 @@ class Static_routes(ConfigBase):
         resp = self.set_state(want, have)
         for want_config in resp:
             if want_config not in onbox_configs:
-                commands.append(want_config) 
+                commands.append(want_config)
         return commands
 
     def set_state(self, want, have):
@@ -133,13 +128,15 @@ class Static_routes(ConfigBase):
                   to the desired configuration
         """
         commands = []
+        if self.state in ('merged', 'replaced', 'overridden') and not want:
+            self._module.fail_json(msg='value of config parameter must not be empty for state {0}'.format(self.state))
         state = self._module.params['state']
         if state == 'overridden':
             commands = self._state_overridden(want, have)
         elif state == 'deleted':
-            commands = self._state_deleted(want,have)
+            commands = self._state_deleted(want, have)
         elif state == 'merged' or self.state == 'rendered':
-            commands = self._state_merged(want,have)
+            commands = self._state_merged(want, have)
         elif state == 'replaced':
             commands = self._state_replaced(want, have)
         return commands
@@ -158,12 +155,12 @@ class Static_routes(ConfigBase):
         for h in have:
             return_command = add_commands(h)
             for command in return_command:
-                if vrf == None:
+                if vrf is None:
                     if "vrf" not in command:
                         haveconfigs.append(command)
                 else:
                     if vrf in command:
-                        haveconfigs.append(command)          
+                        haveconfigs.append(command)
         wantconfigs = set_commands(want, have)
 
         removeconfigs = list(set(haveconfigs) - set(wantconfigs))
@@ -187,9 +184,10 @@ class Static_routes(ConfigBase):
             return_command = add_commands(h)
             for command in return_command:
                 haveconfigs.append(command)
-
         wantconfigs = set_commands(want, have)
-
+        idempotentconfigs = list(set(wantconfigs) - set(haveconfigs))
+        if not idempotentconfigs:
+            return idempotentconfigs
         removeconfigs = list(set(haveconfigs) - set(wantconfigs))
         for command in removeconfigs:
             commands.append("no " + command)
@@ -208,7 +206,7 @@ class Static_routes(ConfigBase):
         return set_commands(want, have)
 
     @staticmethod
-    def _state_deleted(want,have):
+    def _state_deleted(want, have):
         """ The command generator when state is deleted
 
         :rtype: A list
@@ -222,13 +220,14 @@ class Static_routes(ConfigBase):
                 for command in return_command:
                     command = "no " + command
                     commands.append(command)
-        else :
+        else:
             for w in want:
-                return_command = del_commands(w,have)
+                return_command = del_commands(w, have)
                 for command in return_command:
                     commands.append(command)
         return commands
-    
+
+
 def set_commands(want, have):
     commands = []
     for w in want:
@@ -236,18 +235,13 @@ def set_commands(want, have):
         for command in return_command:
             commands.append(command)
     return commands
-        # if not obj_in_have:
-        #    commands = self.add_commands(w)
-        # else:
-        #    diff = self.diff_of_dicts(w, obj_in_have)
-        #    commands = self.add_commands(diff)
-        # return commands
+
 
 def add_commands(want):
     commandset = []
     if not want:
         return commandset
-    vrf = want["vrf"] if "vrf" in want.keys() and want["vrf"] != None else None
+    vrf = want["vrf"] if "vrf" in want.keys() and want["vrf"] is not None else None
     for address_family in want["address_families"]:
         for route in address_family["routes"]:
             for next_hop in route["next_hops"]:
@@ -259,34 +253,34 @@ def add_commands(want):
                 if vrf:
                     commands.append(' vrf ' + vrf)
                 if not re.search(r'/', route["dest"]):
-                    mask = route["dest"].split( )[1]
+                    mask = route["dest"].split()[1]
                     cidr = get_net_size(mask)
-                    commands.append(' ' + route["dest"].split( )[0] + '/' + cidr)
+                    commands.append(' ' + route["dest"].split()[0] + '/' + cidr)
                 else:
                     commands.append(' ' + route["dest"])
                 if "interface" in next_hop.keys():
                     commands.append(' ' + next_hop["interface"])
-                if "nexhop_grp" in next_hop.keys():
+                if "nexthop_grp" in next_hop.keys():
                     commands.append(' Nexthop-Group' + ' ' + next_hop["nexthop_grp"])
-                    commands.append(' ' + next_hop["interface"])
                 if "forward_router_address" in next_hop.keys():
                     commands.append(' ' + next_hop["forward_router_address"])
                 if "mpls_label" in next_hop.keys():
                     commands.append(' label ' + str(next_hop["mpls_label"]))
                 if "track" in next_hop.keys():
-                    commands.append(' track '+next_hop["track"])
+                    commands.append(' track ' + next_hop["track"])
                 if "admin_distance" in next_hop.keys():
-                    commands.append(' '+str(next_hop["admin_distance"]))
+                    commands.append(' ' + str(next_hop["admin_distance"]))
                 if "description" in next_hop.keys():
-                    commands.append(' name '+str(next_hop["description"]))
+                    commands.append(' name ' + str(next_hop["description"]))
                 if "tag" in next_hop.keys():
-                    commands.append(' tag '+str(next_hop["tag"]))
+                    commands.append(' tag ' + str(next_hop["tag"]))
 
                 config_commands = "".join(commands)
                 commandset.append(config_commands)
     return commandset
 
-def del_commands(want,have):
+
+def del_commands(want, have):
     commandset = []
     haveconfigs = []
     for h in have:
@@ -300,7 +294,7 @@ def del_commands(want,have):
         commandset = []
         for command in haveconfigs:
             if want["vrf"] in command:
-                commandset.append(command) 
+                commandset.append(command)
     elif want is not None and "vrf" not in want.keys() and "address_families" not in want.keys():
         commandset = []
         for command in haveconfigs:
@@ -322,9 +316,9 @@ def del_commands(want,have):
             else:
                 for route in address_family["routes"]:
                     if not re.search(r'/', route["dest"]):
-                        mask = route["dest"].split( )[1]
+                        mask = route["dest"].split()[1]
                         cidr = get_net_size(mask)
-                        destination = route["dest"].split( )[0] + '/' + cidr
+                        destination = route["dest"].split()[0] + '/' + cidr
                     else:
                         destination = route["dest"]
                     if "next_hops" not in route.keys():
@@ -354,13 +348,13 @@ def del_commands(want,have):
                             if "mpls_label" in next_hop.keys():
                                 commands.append(' label ' + str(next_hop["mpls_label"]))
                             if "track" in next_hop.keys():
-                                commands.append(' track '+next_hop["track"])
+                                commands.append(' track ' + next_hop["track"])
                             if "admin_distance" in next_hop.keys():
-                                commands.append(' '+str(next_hop["admin_distance"]))
+                                commands.append(' ' + str(next_hop["admin_distance"]))
                             if "description" in next_hop.keys():
-                                commands.append(' name '+str(next_hop["description"]))
+                                commands.append(' name ' + str(next_hop["description"]))
                             if "tag" in next_hop.keys():
-                                commands.append(' tag '+str(next_hop["tag"]))
+                                commands.append(' tag ' + str(next_hop["tag"]))
 
                             config_commands = "".join(commands)
                             commandset.append(config_commands)
@@ -373,6 +367,7 @@ def get_net_size(netmask):
     for octet in netmask:
         binary_str += bin(int(octet))[2:].zfill(8)
     return str(len(binary_str.rstrip('0')))
+
 
 def get_vrf(config):
     vrf = ""

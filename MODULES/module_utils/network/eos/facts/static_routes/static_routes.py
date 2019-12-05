@@ -9,6 +9,10 @@ It is in this file the configuration is collected from the device
 for a given resource, parsed, and the facts tree is populated
 based on the configuration.
 """
+
+from __future__ import (absolute_import, division, print_function)
+__metaclass__ = type
+
 import re
 from copy import deepcopy
 
@@ -24,7 +28,6 @@ class Static_routesFacts(object):
         self._module = module
         self.argument_spec = Static_routesArgs.argument_spec
         spec = deepcopy(self.argument_spec)
-        import q
         if subspec:
             if options:
                 facts_argument_spec = spec[subspec][options]
@@ -38,7 +41,6 @@ class Static_routesFacts(object):
     def get_device_data(self, connection):
         return connection.get('show running-config | grep route')
 
-
     def populate_facts(self, connection, ansible_facts, data=None):
         """ Populate the facts for static_routes
         :param connection: the device connection
@@ -50,7 +52,6 @@ class Static_routesFacts(object):
         if not data:
             data = self.get_device_data(connection)
 
-        import q
         # split the config into instances of the resource
         resource_delim = 'ip.* route'
         find_pattern = r'(?:^|\n)%s.*?(?=(?:^|\n)%s|$)' % (resource_delim,
@@ -60,19 +61,19 @@ class Static_routesFacts(object):
         resource_vrf = {}
         for resource in resources:
             if resource and "vrf" not in resource:
-                resources_without_vrf.append(resource) 
+                resources_without_vrf.append(resource)
             else:
-                vrf = re.search(r'ip(v6)* route vrf (.*?) .*',resource)
+                vrf = re.search(r'ip(v6)* route vrf (.*?) .*', resource)
                 if vrf.group(2) in resource_vrf.keys():
                     vrf_val = resource_vrf[vrf.group(2)]
                     vrf_val.append(resource)
                     resource_vrf.update({vrf.group(2): vrf_val})
-                else :
+                else:
                     resource_vrf.update({vrf.group(2): [resource]})
         resources_without_vrf = ["\n".join(resources_without_vrf)]
         for vrf in resource_vrf.keys():
             vrflist = ["\n".join(resource_vrf[vrf])]
-            resource_vrf.update({vrf: vrflist}) 
+            resource_vrf.update({vrf: vrflist})
         objs = []
         for resource in resources_without_vrf:
             if resource:
@@ -91,8 +92,6 @@ class Static_routesFacts(object):
             params = utils.validate_config(self.argument_spec, {'config': objs})
             for cfg in params['config']:
                 facts['static_routes'].append(utils.remove_empties(cfg))
-
-
         ansible_facts['ansible_network_resources'].update(facts)
         return ansible_facts
 
@@ -107,7 +106,6 @@ class Static_routesFacts(object):
         :returns: The generated config
         """
         config = deepcopy(spec)
-        import q
         address_family_dict = {}
         route_dict = {}
         dest_list = []
@@ -118,7 +116,7 @@ class Static_routesFacts(object):
         config["address_families"] = []
         next_hops = {}
         interface_list = ["Ethernet", "Loopback", "Management",
-                            "Port-Channel", "Tunnel", "Vlan", "Vxlan", "vtep"]
+                          "Port-Channel", "Tunnel", "Vlan", "Vxlan", "vtep"]
         conf_list = conf.split('\n')
         for conf_elem in conf_list:
             matches = re.findall(r'(ip|ipv6) route ([\d\.\/:]+|vrf) (.+)$', conf_elem)
@@ -127,7 +125,7 @@ class Static_routesFacts(object):
                 route_update = False
                 if matches[0][1] == "vrf":
                     vrf = remainder.pop(0)
-                    # new vrf 
+                    # new vrf
                     if vrf not in vrf_list and vrf_list:
                         route_dict.update({"next_hops": next_hops})
                         routes.append(route_dict)
@@ -139,15 +137,15 @@ class Static_routesFacts(object):
                     dest = remainder.pop(0)
                 else:
                     config["vrf"] = None
-                    dest = matches[0][1] 
-                afi  = "ipv4" if matches[0][0] == "ip" else "ipv6"
+                    dest = matches[0][1]
+                afi = "ipv4" if matches[0][0] == "ip" else "ipv6"
                 if afi not in afi_list:
                     if afi_list and not route_update:
                         # new afi and not the first updating all prev configs
                         route_dict.update({"next_hops": next_hops})
                         routes.append(route_dict)
                         address_family_dict.update({"routes": routes})
-                        config["address_families"].append(address_family_dict)            
+                        config["address_families"].append(address_family_dict)
                         route_update = True
                     address_family_dict = {}
                     address_family_dict.update({"afi": afi})
@@ -159,7 +157,7 @@ class Static_routesFacts(object):
                     dest = dest + ' ' + remainder.pop(0)
                 if dest not in dest_list:
                     # For new dest and  not the first dest
-                    if  dest_list and not route_update:
+                    if dest_list and not route_update:
                         route_dict.update({"next_hops": next_hops})
                         routes.append(route_dict)
                     dest_list.append(dest)
@@ -179,7 +177,7 @@ class Static_routesFacts(object):
                 else:
                     interface = remainder.pop(0)
                     if interface in interface_list:
-                        interface = interface +" "+ remainder.pop(0)
+                        interface = interface + " " + remainder.pop(0)
                     nexthops.update({"interface": interface})
                 for attribute in remainder:
                     forward_addr = re.search(r'([\dA-Fa-f]+[:\.]+)+[\dA-Fa-f]+', attribute)
@@ -191,7 +189,7 @@ class Static_routesFacts(object):
                             keyname = params
                             if attribute == "name":
                                 keyname = "description"
-                            nexthops.update({keyname: remainder.pop(remainder.index(attribute)+1)})
+                            nexthops.update({keyname: remainder.pop(remainder.index(attribute) + 1)})
                             remainder.pop(remainder.index(attribute))
                 if remainder:
                     metric = re.search(r'\d+', remainder[0])

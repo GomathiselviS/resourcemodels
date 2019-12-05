@@ -30,19 +30,20 @@ from __future__ import absolute_import, division, print_function
 __metaclass__ = type
 
 ANSIBLE_METADATA = {
-  'metadata_version': '1.1',
-  'status': ['preview'],
-  'supported_by': 'network'
+    'metadata_version': '1.1',
+    'status': ['preview'],
+    'supported_by': 'network'
 }
 
 DOCUMENTATION = """
 ---
 module: eos_static_routes
-version_added: 2.10
+version_added: "2.10"
 short_description: Configures and manages attributes of static routes on Arista EOS platforms.
 description: This module configures and manages the attributes of static routes on Arista EOS platforms.
 author: Gomathi Selvi Srinivasan (@GomathiselviS)
 notes:
+ - Tested against: vEOS 4.20.10M
 options:
   config:
     description:
@@ -71,14 +72,14 @@ options:
             type: list
             suboptions:
               dest:
-                description: 
+                description:
                   - Destination IPv4 subnet (CIDR or address-mask notation).
                   - The address format is <v4/v6 address>/<mask> or <v4/v6 address> <mask>.
                   - The mask is number in range 0-32 for IPv4 and in range 0-128 for IPv6.
                 type: str
                 required: True
-              next_hops: 
-                description: 
+              next_hops:
+                description:
                   - Details of route to be taken.
                 type: list
                 elements: dict
@@ -102,8 +103,12 @@ options:
                       - Tunnel  Tunnel interface
                       - vtep  Configure VXLAN Tunnel End Points
                     type: str
+                  nexthop_grp:
+                    description:
+                        - Nexthop group
+                    type: str
                   admin_distance:
-                    description: 
+                    description:
                       - Preference or administrative distance of route (range 1-255).
                     type: int
                   description:
@@ -126,48 +131,60 @@ options:
                     description:
                       - VRF of the destination.
                     type: str
+  running_config:
+    description:
+      - The module, by default, will connect to the remote device and
+        retrieve the current running-config to use as a base for comparing
+        against the contents of source. There are times when it is not
+        desirable to have the task get the current running-config for
+        every task in a playbook.  The I(running_config) argument allows the
+        implementer to pass in the configuration to use as the base
+        config for comparison. This value of this option should be the
+        output received from device by executing command
+    version_added: "2.10"
+    type: str
   state:
     description:
       - The state the configuration should be left in.
     type: str
     choices:
-      ['deleted', 'merged', 'overridden', 'replaced', 'gathered', 'rendered']
+      ['deleted', 'merged', 'overridden', 'replaced', 'gathered', 'rendered', 'parsed']
     default:
       merged
 """
 EXAMPLES = """
 # Using deleted
 
-Before State
--------------
-veos(config)#show running-config | grep "route"
-ip route 165.10.1.0/24 Ethernet1 100
-ip route 172.17.252.0/24 Nexthop-Group testgroup
-ip route vrf testvrf 130.1.122.0/24 Ethernet1 tag 50
-ipv6 route 5001::/64 Ethernet1 50
-veos(config)#
+# Before State
+# -------------
+# veos(config)#show running-config | grep "route"
+# ip route 165.10.1.0/24 Ethernet1 100
+# ip route 172.17.252.0/24 Nexthop-Group testgroup
+# ip route vrf testvrf 130.1.122.0/24 Ethernet1 tag 50
+# ipv6 route 5001::/64 Ethernet1 50
+# veos(config)#
 
 - name: Delete static route configuration
   eos_static_routes:
     state: deleted
 
-After State
------------
+# After State
+# -----------
 
-veos(config)#show running-config | grep "route"
-veos(config)#
+# veos(config)#show running-config | grep "route"
+# veos(config)#
 
 
 # Using merged
 
-Before State
--------------
-veos(config)#show running-config | grep "route"
-ip route 165.10.1.0/24 Ethernet1 100
-ip route 172.17.252.0/24 Nexthop-Group testgroup
-ip route vrf testvrf 130.1.122.0/24 Ethernet1 tag 50
-ipv6 route 5001::/64 Ethernet1 50
-veos(config)#
+# Before State
+# -------------
+# veos(config)#show running-config | grep "route"
+# ip route 165.10.1.0/24 Ethernet1 100
+# ip route 172.17.252.0/24 Nexthop-Group testgroup
+# ip route vrf testvrf 130.1.122.0/24 Ethernet1 tag 50
+# ipv6 route 5001::/64 Ethernet1 50
+# veos(config)#
 
 - name: Merge new static route configuration
   eos_static_routes:
@@ -177,33 +194,33 @@ veos(config)#
           - afi: ipv6
             routes:
               - dest: 2211::0/64
-                next_hop: 
+                next_hop:
                   - forward_router_address: 100:1::2
-                    interface: "Ethernet1"                
+                    interface: "Ethernet1"
     state: merged
 
-After State
------------
+# After State
+# -----------
 
-veos(config)#show running-config | grep "route"
-ip route 165.10.1.0/24 Ethernet1 100
-ip route 172.17.252.0/24 Nexthop-Group testgroup
-ip route vrf testvrf 130.1.122.0/24 Ethernet1 tag 50
-ipv6 route 2211::/64 Ethernet1 100:1::2
-ipv6 route 5001::/64 Ethernet1 50
-veos(config)#
+# veos(config)#show running-config | grep "route"
+# ip route 165.10.1.0/24 Ethernet1 100
+# ip route 172.17.252.0/24 Nexthop-Group testgroup
+# ip route vrf testvrf 130.1.122.0/24 Ethernet1 tag 50
+# ipv6 route 2211::/64 Ethernet1 100:1::2
+# ipv6 route 5001::/64 Ethernet1 50
+# veos(config)#
 
 
 # Using overridden
 
-Before State
--------------
-veos(config)#show running-config | grep "route"
-ip route 165.10.1.0/24 Ethernet1 100
-ip route 172.17.252.0/24 Nexthop-Group testgroup
-ip route vrf testvrf 130.1.122.0/24 Ethernet1 tag 50
-ipv6 route 5001::/64 Ethernet1 50
-veos(config)#
+# Before State
+# -------------
+# veos(config)#show running-config | grep "route"
+# ip route 165.10.1.0/24 Ethernet1 100
+# ip route 172.17.252.0/24 Nexthop-Group testgroup
+# ip route vrf testvrf 130.1.122.0/24 Ethernet1 tag 50
+# ipv6 route 5001::/64 Ethernet1 50
+# veos(config)#
 
 - name: Overridden static route configuration
   eos_static_routes:
@@ -218,24 +235,24 @@ veos(config)#
                     interface: "Ethernet1"
     state: replaced
 
-After State
------------
+# After State
+# -----------
 
-veos(config)#show running-config | grep "route"
-ip route 150.10.1.0/24 Ethernet1 10.1.1.2
-veos(config)#
+# veos(config)#show running-config | grep "route"
+# ip route 150.10.1.0/24 Ethernet1 10.1.1.2
+# veos(config)#
 
 
 # Using replaced
 
-Before State
--------------
-veos(config)#show running-config | grep "route"
-ip route 165.10.1.0/24 Ethernet1 100
-ip route 172.17.252.0/24 Nexthop-Group testgroup
-ip route vrf testvrf 130.1.122.0/24 Ethernet1 tag 50
-ipv6 route 5001::/64 Ethernet1 50
-veos(config)#
+# Before State
+# -------------
+# veos(config)#show running-config | grep "route"
+# ip route 165.10.1.0/24 Ethernet1 100
+# ip route 172.17.252.0/24 Nexthop-Group testgroup
+# ip route vrf testvrf 130.1.122.0/24 Ethernet1 tag 50
+# ipv6 route 5001::/64 Ethernet1 50
+# veos(config)#
 
 - name: Replace static route configuration
   eos_static_routes:
@@ -250,73 +267,70 @@ veos(config)#
                     interface: "Ethernet1"
     state: replaced
 
-After State
------------
+# After State
+# -----------
 
-veos(config)#show running-config | grep "route"
-ip route 165.10.1.0/24 Ethernet1 10.1.1.2
-ip route 172.17.252.0/24 Nexthop-Group testgroup
-ip route vrf testvrf 130.1.122.0/24 Ethernet1 tag 50
-ipv6 route 2211::/64 Ethernet1 100:1::2
-ipv6 route 5001::/64 Ethernet1 50
-veos(config)#
+# veos(config)#show running-config | grep "route"
+# ip route 165.10.1.0/24 Ethernet1 10.1.1.2
+# ip route 172.17.252.0/24 Nexthop-Group testgroup
+# ip route vrf testvrf 130.1.122.0/24 Ethernet1 tag 50
+# ipv6 route 2211::/64 Ethernet1 100:1::2
+# ipv6 route 5001::/64 Ethernet1 50
+# veos(config)#
 
 
-Before State
--------------
-veos(config)#show running-config | grep "route"
-ip route 165.10.1.0/24 Ethernet1 10.1.1.2 100
-ipv6 route 5001::/64 Ethernet1
-veos(config)#
+# Before State
+# -------------
+# veos(config)#show running-config | grep "route"
+# ip route 165.10.1.0/24 Ethernet1 10.1.1.2 100
+# ipv6 route 5001::/64 Ethernet1
+# veos(config)#
 
 
 - name: Gather the exisitng condiguration
   eos_static_routes:
     state: gathered
 
-
-returns :
-  eos_static_routes:
-    config:
-      - address_families:
-          - afi: ipv4
-            routes:
-              - dest: 165.10.1.0/24
-                next_hop:
-                  - forward_router_address: 10.1.1.2
-                    interface: "Ethernet1"
-		    admin_distance: 100
-         - afi: ipv6
-            routes:
-              - dest: 5001::/64
-                next_hop:
-                  - interface: "Ethernet1"	
+# returns :
+#  eos_static_routes:
+#    config:
+#      - address_families:
+#          - afi: ipv4
+#            routes:
+#              - dest: 165.10.1.0/24
+#                next_hop:
+#                  - forward_router_address: 10.1.1.2
+#                    interface: "Ethernet1"
+#                    admin_distance: 100
+#          - afi: ipv6
+#            routes:
+#              - dest: 5001::/64
+#                next_hop:
+#                  - interface: "Ethernet1"
 
 
 # Using rendered
 
-i  eos_static_routes:
-    config:
-      - address_families:
-          - afi: ipv4
-            routes:
-              - dest: 165.10.1.0/24
-                next_hop:
-                  - forward_router_address: 10.1.1.2
-                    interface: "Ethernet1"
-                    admin_distance: 100
-         - afi: ipv6
-            routes:
-              - dest: 5001::/64
-                next_hop:
-                  - interface: "Ethernet1"
+#   eos_static_routes:
+#    config:
+#      - address_families:
+#          - afi: ipv4
+#            routes:
+#              - dest: 165.10.1.0/24
+#                next_hop:
+#                  - forward_router_address: 10.1.1.2
+#                    interface: "Ethernet1"
+#                    admin_distance: 100
+#         - afi: ipv6
+#            routes:
+#              - dest: 5001::/64
+#                next_hop:
+#                  - interface: "Ethernet1"
 
+# returns:
 
-
-returns:
-
-ip route 165.10.1.0/24 Ethernet1 10.1.1.2 100
-ipv6 route 5001::/64 Ethernet1
+# ip route 165.10.1.0/24 Ethernet1 10.1.1.2 100
+# ipv6 route 5001::/64 Ethernet1
 
 
 """
@@ -324,12 +338,14 @@ RETURN = """
 before:
   description: The configuration prior to the model invocation.
   returned: always
+  type: list
   sample: >
     The configuration returned will always be in the same format
      of the parameters above.
 after:
   description: The resulting configuration model invocation.
   returned: when changed
+  type: list
   sample: >
     The configuration returned will always be in the same format
      of the parameters above.
@@ -337,7 +353,58 @@ commands:
   description: The set of commands pushed to the remote device.
   returned: always
   type: list
-  sample: ['command 1', 'command 2', 'command 3']
+  sample:
+    - ip route vrf vrf1 192.2.2.0/24 125.2.3.1 93
+rendered:
+  description: The set of CLI commands generated from the value in C(config) option
+  returned: When C(state) is I(rendered)
+  type: list
+  sample: >
+    "address_families": [
+                        {
+                            "afi": "ipv4",
+                            "routes": [
+                                {
+                                    "dest": "192.2.2.0/24",
+                                    "next_hops": [
+                                        {
+                                            "admin_distance": 93,
+                                            "description": null,
+                                            "forward_router_address": null,
+                                            "interface": "125.2.3.1",
+                                            "mpls_label": null,
+                                            "nexthop_grp": null,
+                                            "tag": null,
+                                            "track": null,
+                                            "vrf": null
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ],
+                    "vrf": "vrf1"
+                }
+            ],
+            "running_config": null,
+            "state": "rendered"
+        }
+gathered:
+  description: The configuration as structured data transformed for the running configuration
+               fetched from remote host
+  returned: When C(state) is I(gathered)
+  type: list
+  sample: >
+    The configuration returned will always be in the same format
+    of the parameters above.
+parsed:
+  description: The configuration as structured data transformed for the value of
+               C(running_config) option
+  returned: When C(state) is I(parsed)
+  type: list
+  sample: >
+    The configuration returned will always be in the same format
+    of the parameters above.
 """
 
 
@@ -352,8 +419,17 @@ def main():
 
     :returns: the result form module invocation
     """
+
+    required_if = [('state', 'merged', ('config',)),
+                   ('state', 'replaced', ('config',)),
+                   ('state', 'overridden', ('config',)),
+                   ('state', 'parsed', ('running_config',))]
+    mutually_exclusive = [('config', 'running_config')]
+
     module = AnsibleModule(argument_spec=Static_routesArgs.argument_spec,
-                           supports_check_mode=True)
+                           required_if=required_if,
+                           supports_check_mode=True,
+                           mutually_exclusive=mutually_exclusive)
 
     result = Static_routes(module).execute_module()
     module.exit_json(**result)
