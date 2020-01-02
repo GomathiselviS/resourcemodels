@@ -12,6 +12,7 @@ created
 """
 from ansible.module_utils.network.common.cfg.base import ConfigBase
 from ansible.module_utils.network.common.utils import to_list
+from ansible.module_utils.network.common.utils import remove_empties
 from ansible.module_utils.network.eos.facts.facts import Facts
 
 
@@ -54,19 +55,33 @@ class Acls(ConfigBase):
         warnings = list()
         commands = list()
 
-        existing_acls_facts = self.get_acls_facts()
-        commands.extend(self.set_config(existing_acls_facts))
-        if commands:
+        if self.state in self.ACTION_STATES:
+            existing_acls_facts = self.get_acls_facts()
+        else:
+            existing_acls_facts = []
+        if self.state in self.ACTION_STATES or self.state == 'rendered':
+            commands.extend(self.set_config(existing_acls_facts))
+        if commands and self.state in self.ACTION_STATES:
             if not self._module.check_mode:
-                self._connection.edit_config(commands)
+                for command in commands:
+                    self._connection.edit_config(commands)
             result['changed'] = True
-        result['commands'] = commands
-
-        changed_acls_facts = self.get_acls_facts()
-
-        result['before'] = existing_acls_facts
-        if result['changed']:
-            result['after'] = changed_acls_facts
+        if self.state in self.ACTION_STATES:
+            result['commands'] = commands
+        if self.state in self.ACTION_STATES or self.state == 'gathered':
+            changed_acls_facts = self.get_acls_facts()
+        elif self.state == 'rendered':
+            result['rendered'] = commands
+        elif self.state == 'parsed':
+            result['parsed'] = self.get_acls_facts(data=self._module.params['running_config'])
+        else:
+            changed_acls_facts = []
+        if self.state in self.ACTION_STATES:
+            result['before'] = existing_acls_facts
+            if result['changed']:
+                result['after'] = changed_acls_facts
+        elif self.state == 'gathered':
+            result['gathered'] = changed_acls_facts
 
         result['warnings'] = warnings
         return result
@@ -79,7 +94,11 @@ class Acls(ConfigBase):
         :returns: the commands necessary to migrate the current configuration
                   to the desired configuration
         """
-        want = self._module.params['config']
+        config = self._module.params.get('config')
+        want = []
+        if config:
+            for w in config:
+                want.append(remove_empties(w))
         have = existing_acls_facts
         resp = self.set_state(want, have)
         return to_list(resp)
@@ -93,22 +112,22 @@ class Acls(ConfigBase):
         :returns: the commands necessary to migrate the current configuration
                   to the desired configuration
         """
+        commands = []
+        if self.state in ('merged', 'replaced', 'overridden') and not want:
+            self._module.fail_json(msg='value of config parameter must not be empty for state {0}'.format(self.state))
         state = self._module.params['state']
         if state == 'overridden':
-            kwargs = {}
-            commands = self._state_overridden(**kwargs)
+            commands = self._state_overridden(want, have)
         elif state == 'deleted':
-            kwargs = {}
-            commands = self._state_deleted(**kwargs)
+            commands = self._state_deleted(want, have)
         elif state == 'merged':
-            kwargs = {}
-            commands = self._state_merged(**kwargs)
+            commands = self._state_merged(want, have)
         elif state == 'replaced':
-            kwargs = {}
-            commands = self._state_replaced(**kwargs)
+            commands = self._state_replaced(want, have)
         return commands
+
     @staticmethod
-    def _state_replaced(**kwargs):
+    def _state_replaced(want, have):
         """ The command generator when state is replaced
 
         :rtype: A list
@@ -119,7 +138,7 @@ class Acls(ConfigBase):
         return commands
 
     @staticmethod
-    def _state_overridden(**kwargs):
+    def _state_overridden(want, have):
         """ The command generator when state is overridden
 
         :rtype: A list
@@ -130,18 +149,21 @@ class Acls(ConfigBase):
         return commands
 
     @staticmethod
-    def _state_merged(**kwargs):
+    def _state_merged(want, have):
         """ The command generator when state is merged
 
         :rtype: A list
         :returns: the commands necessary to merge the provided into
                   the current configuration
         """
+        import q
         commands = []
+        for w in want:
+            commands.append(set_commands(want, have))
         return commands
 
     @staticmethod
-    def _state_deleted(**kwargs):
+    def _state_deleted(want, have):
         """ The command generator when state is deleted
 
         :rtype: A list
@@ -150,3 +172,62 @@ class Acls(ConfigBase):
         """
         commands = []
         return commands
+
+def set_commands(want, have):
+    commands = []
+    for w in want:
+        return_command = add_commands(w)
+        for command in return_command:
+            commands.append(command)
+    return commands
+
+def add_commands(want):
+    commandset = []
+    if not want:
+        return commandset
+    import q
+    q(want)
+    command = ""
+    afi = "ip" if want["afi"] == "ipv4" else "ipv6"
+    for acl in want["acls"]:
+        if "standard" in acl.keys() and acl["standard"]:
+            command = afi + " access-list standard " + acl["name"]
+        else:
+            command = afi + " access-list " + acl["name"]
+        commandset.append(command)
+        for ace in want["aces"]:
+            command = ""
+            if "sequence" in ace.keys():
+                command = ace["sequence"]
+            command = command + " " + ace["grant"]
+            if "protocol" in ace.keys():
+                command = command + " " + ace["protocol"]
+            if "source" in ace.keys():
+                if "any" in ace["source"].keys():
+                    command = command + " any"
+                elif "subnet_address" in ace["source"].keys():
+                    command = command + " " + ace["source"]["subnet_address"]
+                elif "host" in ace["source"].keys():
+                    command = command + " host " + ace["source"]["host"] 
+                elif "address" in ace["source"].keys():
+                    command = command + " " + ace["source"]["address"] + " " + ace["source"]["wildcard_bits"]
+                if "port_protocol" in ace["source"].keys():
+                    for op in ace["source"]["port_protocol"].keys():
+                        command = command + " " + op + " " + ace["source"]["port_protocol"][op]
+            if "destination" in ace.keys():
+                if "any" in ace["destination"].keys():
+                    command = command + " any"
+                elif "subnet_address" in ace["destination"].keys():
+                    command = command + " " + ace["destination"]["subnet_address"]
+                elif "host" in ace["destination"].keys():
+                    command = command + " host " + ace["destination"]["host"]
+                elif "address" in ace["destination"].keys():
+                    command = command + " " + ace["destination"]["address"] + " " + ace["destination"]["wildcard_bits"]    
+                if "port_protocol" in ace["destination"].keys():
+                    for op in ace["destination"]["port_protocol"].keys():
+                        command = command + " " + op + " " + ace["destination"]["port_protocol"][op]
+            if "protocol_options" in ace.keys():
+                
+    q(commandset)
+    q("***********************")
+    return commandset

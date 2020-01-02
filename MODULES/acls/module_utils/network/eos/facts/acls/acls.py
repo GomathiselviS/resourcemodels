@@ -171,7 +171,9 @@ class AclsFacts(object):
                         source_dict.update({"wildcard_bits": dev_config_remainder.pop(0)})
                     if dev_config_remainder:
                         if dev_config_remainder[0] in operator:
-                            src_port = dev_config_remainder.pop(0)
+                            port_dict = {}
+                            src_port = ""
+                            src_opr = dev_config_remainder.pop(0)
                             portlist = dev_config_remainder.copy()
                             for config_remainder in portlist:
                                 addr = re.search(r'[\.\:]', config_remainder)
@@ -181,7 +183,9 @@ class AclsFacts(object):
                                 else:
                                     src_port = src_port + " " + config_remainder
                                     dev_config_remainder.pop(0)
-                            source_dict.update({"port_protocol": src_port})
+                            src_port = src_port.strip()
+                            port_dict.update({src_opr: src_port})
+                            source_dict.update({"port_protocol": port_dict})
                     ace_dict.update({"source": source_dict})
                     if not dev_config_remainder or standard:
                         if dev_config_remainder and "log" in dev_config_remainder:
@@ -207,15 +211,19 @@ class AclsFacts(object):
                         dest_dict.update({"wildcard_bits": dev_config_remainder.pop(0)})
                     if dev_config_remainder:
                         if dev_config_remainder[0] in operator:
-                            dest_port = dev_config_remainder.pop(0)
+                            port_dict = {}
+                            dest_port = ""
+                            dest_opr = dev_config_remainder.pop(0)
                             portlist = dev_config_remainder.copy()
                             for config_remainder in portlist:
                                 if config_remainder in operator or config_remainder in others:
                                     break
                                 else:
-                                    dest_port = src_port + " " + config_remainder
+                                    dest_port = dest_port + " " + config_remainder
                                     dev_config_remainder.pop(0)
-                            dest_dict.update({"port_protocol": src_port})
+                            dest_port = dest_port.strip()
+                            port_dict.update({dest_opr: dest_port})
+                            dest_dict.update({"port_protocol": port_dict})
                     ace_dict.update({"dest": dest_dict})
                     protocol_option_dict = {}
                     tcp_dict = {}

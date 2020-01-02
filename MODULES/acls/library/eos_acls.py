@@ -773,8 +773,18 @@ def main():
 
     :returns: the result form module invocation
     """
+
+    required_if = [('state', 'merged', ('config',)),
+                   ('state', 'replaced', ('config',)),
+                   ('state', 'overridden', ('config',)),
+                   ('state', 'parsed', ('running_config',))]
+    mutually_exclusive = [('config', 'running_config')]
+
     module = AnsibleModule(argument_spec=AclsArgs.argument_spec,
-                           supports_check_mode=True)
+                           required_if=required_if,
+                           supports_check_mode=True,
+                           mutually_exclusive=mutually_exclusive)
+
 
     result = Acls(module).execute_module()
     module.exit_json(**result)
