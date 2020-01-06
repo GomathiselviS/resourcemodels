@@ -41,7 +41,7 @@ class AclsArgs(object):  # pylint: disable=R0903
                     'options': {
                         'aces': {
                             'options': {
-                                'destination': {
+                                'dest': {
                                     'mutually_exclusive':
                                     [[
                                         'address', 'subnetaddress', 'any',

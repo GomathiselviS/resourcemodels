@@ -139,9 +139,11 @@ class AclsFacts(object):
                 dev_config = re.sub('\-', '_', dev_config)   
                 dev_config_remainder = dev_config.split()
                 if "fragment_rules" in dev_config:
+                    ace_dict.update({"sequence": dev_config_remainder.pop(0)})
                     ace_dict.update({"fragment_rules": True})
                 if "remark" in dev_config:
-                    ace_dict.update({"remark": dev_config_remainder[1:]})
+                    ace_dict.update({"sequence": dev_config_remainder.pop(0)})
+                    ace_dict.update({"remark": ' '.join(dev_config_remainder[1:])})
                 seq = re.search(r'\d+ (permit|deny) .*', dev_config)
                 if seq:
                     ace_dict.update({"sequence": dev_config_remainder.pop(0)})
